@@ -3,7 +3,6 @@ open Lexer_generator
 open Batteries
 open Utils
 open Symbols
-
 let () =
   let regexp_list = [
     (keyword_regexp "while",    fun s -> Some (SYM_WHILE));
@@ -11,11 +10,10 @@ let () =
     (Cat(letter_regexp,
          Star(identifier_material)),
      fun s -> Some (SYM_IDENTIFIER s));
-
   ] in
   (* Décommentez la ligne suivante pour tester sur la vraie liste d'expressions
      régulières. *)
-  (* let regexp_list = list_regexp in *)
+  let regexp_list = list_regexp in
   List.iteri
     (fun i (rg, _) -> Printf.printf "%d: %s\n" i (string_of_regexp rg))
     regexp_list;
