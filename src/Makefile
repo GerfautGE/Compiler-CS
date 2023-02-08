@@ -20,7 +20,8 @@ $(TG): $(SRC)
 	# ocamlbuild $(PROF) -cflags  -warn-error,"+a-26" -cflags -w,"-26" -menhir "menhir --unused-tokens" -use-ocamlfind $(TG)
 
 test_lexer: archi.ml config.ml e_regexp.ml lexer_generator.ml symbols.ml test_lexer.ml utils.ml
-	dune exec test_lexer.exe
+	dune build test_lexer.exe
+	dune exec ./test_lexer.exe
 	dot -Tsvg /tmp/dfa.dot -o /tmp/dfa.svg
 	dot -Tsvg /tmp/nfa.dot -o /tmp/nfa.svg
 

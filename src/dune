@@ -5,8 +5,8 @@
 )
 (ocamllex lexer)
 
-(executable
- (name main)
+(executables
+ (names main test_lexer)
  (libraries
    batteries
    yojson
