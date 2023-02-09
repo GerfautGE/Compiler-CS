@@ -97,7 +97,7 @@ let list_regexp : (regexp * (string -> token option)) list =
     (char_regexp '>', fun _ -> Some (SYM_GT));
     (keyword_regexp "<=", fun _ -> Some (SYM_LEQ));
     (keyword_regexp ">=", fun _ -> Some (SYM_GEQ));
-    (Cat(Alt(letter_regexp, keyword_regexp "_"), Star identifier_material), fun s -> Some (SYM_IDENTIFIER s));
+    (Cat(Alt(letter_regexp, char_regexp '_'), Star identifier_material), fun s -> Some (SYM_IDENTIFIER s));
     (* end TODO *)
     (Cat(keyword_regexp "//",
          Cat(Star (char_range (List.filter (fun c -> c <> '\n') alphabet)),
