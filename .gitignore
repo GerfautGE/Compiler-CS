@@ -8,3 +8,4 @@ skeleton
 src/.vscode/
 .vscode/
 Makefile.config
+.DS_Store
