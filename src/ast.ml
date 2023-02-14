@@ -31,6 +31,7 @@ type tag = Tassign | Tif | Twhile | Tblock | Treturn | Tprint
          | Tfundef | Tfunname | Tfunargs | Tfunbody
          | Tassignvar
          | Targ
+         | Telse
 
 type tree = | Node of tag * tree list
             | StringLeaf of string
@@ -73,6 +74,7 @@ let string_of_tag = function
   | Tfunbody -> "Tfunbody"
   | Tassignvar -> "Tassignvar"
   | Targ -> "Targ"
+  | Telse -> "Telse"
 
 
 (* Écrit un fichier .dot qui correspond à un AST *)
