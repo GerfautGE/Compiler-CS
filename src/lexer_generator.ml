@@ -373,17 +373,13 @@ let tokenize_one (d : dfa) (w: char list) : lexer_result * char list =
   let rec recognize (q: dfa_state) (w: char list) (current_token: char list) (last_accepted: lexer_result * char list) : lexer_result * char list =
     match w with
     |[] ->
-      if fst last_accepted = LRerror
-      then (LRtoken SYM_EOF, [])
-      else last_accepted
-    |c::left_char ->
-      match d.dfa_step q c with
+      if fst last_accepted = LRerror then (LRtoken SYM_EOF, []) else last_accepted
+    |c::left_char -> match d.dfa_step q c with
       | None -> last_accepted
-      | Some state ->
-        let token = current_token@[c] in
+      | Some state -> let token = current_token@[c] in
         let finals = List.filter (fun (st, _) -> st = state) d.dfa_final in
         match finals with
-        | [] -> last_accepted
+        | [] -> recognize state left_char token last_accepted
         | fs::rest -> match snd fs (string_of_char_list token) with
           | None -> recognize state left_char token (LRskip, left_char)
           | Some t -> recognize state left_char token (LRtoken t, left_char)
