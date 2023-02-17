@@ -268,37 +268,31 @@ let priority t =
 let min_priority (l: token list) : token option =
   match l with
   | [] -> None
-  | t::ts ->
-    let (t, _) =
-      List.fold_left (fun (t, p) t' ->
-          let p' = priority t' in
-          if p' < p then (t', p') else (t, p)
-        ) (t, priority t) ts
-      in
+  | head_token :: left_tokens -> let (t, _) = List.fold_left(fun (t1,p1) t2 -> if (priority t2 < p1) then (t2, (priority t2)) else (t1,p1)) (head_token, priority head_token) left_tokens in
     Some t
 
 (* [dfa_final_states n dfa_states] renvoie la liste des états finaux du DFA,
    accompagnés du token qu'ils reconnaissent. *)
-let dfa_final_states (n: nfa) (dfa_states: dfa_state list) :
-  (dfa_state * (string -> token option)) list  =
-  let final_shape (state: dfa_state) : int * dfa_state * (string -> token option) =
-    let nfa_finals_in_state = List.filter (fun (q,t) -> Set.mem q state) n.nfa_final in
-    let dfa_t (str: string) : token option =
-      let n_token = List.map snd nfa_finals_in_state in
-      let nfa_tokens_options = List.map (fun t -> t str) n_token in
-      let nfa_tokens = List.fold_left (fun acc elem -> match elem with
-                                                       | None -> acc
-                                                       | Some token -> token::acc)
-                                      [] nfa_tokens_options in
-      min_priority nfa_tokens
-    in
-    (* (List.fold_left (fun acc elem -> Set.add (fst elem) acc) Set.empty nfa_finals_in_state, dfa_t) *)
-    (List.length nfa_finals_in_state, state, dfa_t)
-  in
-  let final_shapes = List.map final_shape dfa_states in
-  (* keeping only final dfa states (that have at least an nfa state in it) *)
-  let dfa_finals = List.filter (fun x -> let (cnt, _, _) = x in cnt <> 0) final_shapes in
-  List.map (fun x -> let (_, state, dfa_t) = x in (state, dfa_t)) dfa_finals
+let dfa_final_states (n: nfa) (dfa_states: dfa_state list) : (dfa_state * (string -> token option)) list =
+  (* On va traiter les états un par un. pour cela on creer une fonction qui a chaque etat associe la liste des tokens qu'il peut retourner *)
+
+  let token_from_state (state: dfa_state) : int * dfa_state * (string -> token option) =
+    let nf_in_dstate = List.filter (fun (q,_) -> Set.mem q state) n.nfa_final in (* On récupère les états finaux du nfa qui sont dans l'état concerné du DFA *)
+    let d_t (str: string) : token option = (* On récupère le token associé à l'état final du nfa *)
+      let n_t = List.map snd nf_in_dstate in (* On extrait des états finaux du nfa leur token *)
+      let nfa_t_options = List.map (fun t -> t str) n_t in (* On applique le token à la chaine de caractère passée en argument *)
+      let nfa_tokens =
+        List.fold_left (fun acc elt ->
+            match elt with
+              None -> acc (* Si le token n'est pas reconnu, on ne l'ajoute pas à la liste *)
+            | Some token -> token :: acc )
+          [] nfa_t_options in (* On récupère les tokens reconnus *)
+      min_priority nfa_tokens in (* On renvoie le token de priorité la plus faible *)
+    (List.length nf_in_dstate, state, d_t) in
+
+  let tokens_from_dfa = List.map token_from_state dfa_states in (* On applique la fonction token_form_state à chaque état du DFA *)
+  let tokens = List.filter (fun (cnt, _, _) -> cnt <> 0) tokens_from_dfa in (* On enlève les états inutiles *)
+  List.map (fun (_, state, dfa_t) -> (state, dfa_t)) tokens
 
 
 (* Construction de la relation de transition du DFA. *)
