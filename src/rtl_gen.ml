@@ -15,9 +15,9 @@ open Options
 
    Étant donnés :
    - [next_reg], le premier numéro de registre disponible (pas encore alloué à
-   une variable)
+     une variable)
    - [var2reg], une liste d'associations dont les clés sont des variables et les
-   valeurs des numéros de registres
+     valeurs des numéros de registres
    - [v] un nom de variable (de type [string]),
 
    [find_var (next_reg, var2reg) v] renvoie un triplet [(r, next_reg, var2reg)]:
@@ -29,8 +29,8 @@ open Options
 *)
 let find_var (next_reg, var2reg) v =
   match List.assoc_opt v var2reg with
-    | Some r -> (r, next_reg, var2reg)
-    | None -> (next_reg, next_reg + 1, assoc_set var2reg v next_reg)
+  | Some r -> (r, next_reg, var2reg)
+  | None -> (next_reg, next_reg + 1, assoc_set var2reg v next_reg)
 
 (* [rtl_instrs_of_cfg_expr (next_reg, var2reg) e] construit une liste
    d'instructions RTL correspondant à l'évaluation d'une expression E.
@@ -43,7 +43,15 @@ let find_var (next_reg, var2reg) v =
    - [var2reg] est la nouvelle association nom de variable/registre.
 *)
 let rec rtl_instrs_of_cfg_expr (next_reg, var2reg) (e: expr) =
-   (next_reg, [], next_reg, var2reg)
+  match e with
+  | Eint(i) -> (i, [Rconst(i, next_reg)], next_reg+1, var2reg)
+  | Evar(s) -> let (r, next_reg, var2reg) = find_var (next_reg, var2reg) s in
+    (r, [], next_reg+1, var2reg@[(s, r)])
+  | Eunop(u, e) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
+    (r, [Runop(u, r, next_reg)], next_reg+1, var2reg)
+  | Ebinop(b, e1, e2) -> let (r1, l1, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e1 in
+    let (r2, l2, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e2 in
+    (r1, [Rbinop(b, r1, r2, next_reg)], next_reg+1, var2reg)
 
 let is_cmp_op =
   function Eclt -> Some Rclt
@@ -64,8 +72,24 @@ let rtl_cmp_of_cfg_expr (e: expr) =
 
 
 let rtl_instrs_of_cfg_node ((next_reg:int), (var2reg: (string*int) list)) (c: cfg_node) =
-   (* TODO *)
-   ([], next_reg, var2reg)
+  let (l, next_reg, var2reg) = match c with
+    | Cassign (s, e, i) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
+      let (rs, next_reg, var2reg) = find_var (next_reg, var2reg) s in
+      (l @ [Rmov (r, rs)], next_reg, var2reg)
+    | Creturn (e) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
+      (l @ [Rret(r)], next_reg, var2reg)
+    | Cprint (e, i) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
+      (l @ [Rprint(r)], next_reg, var2reg)
+    | Ccmp (e, i1, i2) ->
+      let Ebinop(b, e1, e2) = e in
+      let (r1, l1, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e1 in
+      let (r2, l2, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e2 in
+      if is_cmp_op b <> None
+      then let (op, _, _) = rtl_cmp_of_cfg_expr e in
+      (l1 @ l2 @ [Rbranch(op, r1, r1, r2)], next_reg, var2reg)
+      else (l1 @ l2 @ [Rbinop(b, r1, r1, r2)], next_reg, var2reg)
+    | Cnop (i) -> ([], next_reg, var2reg)
+  in (l, next_reg, var2reg)
 
 let rtl_instrs_of_cfg_fun cfgfunname ({ cfgfunargs; cfgfunbody; cfgentry }: cfg_fun) =
   let (rargs, next_reg, var2reg) =
