@@ -9,18 +9,41 @@ let binop_bool_to_int f x y = if f x y then 1 else 0
    et [y]. *)
 let eval_binop (b: binop) : int -> int -> int =
   match b with
-   | _ -> fun x y -> 0
+  | Eadd -> (+)
+  | Emul -> ( * )
+  | Emod -> (mod)
+  | Exor -> (lxor)
+  | Ediv -> (/)
+  | Esub -> (-)
+  | Eclt -> binop_bool_to_int (<)
+  | Ecle -> binop_bool_to_int (<=)
+  | Ecgt -> binop_bool_to_int (>)
+  | Ecge -> binop_bool_to_int (>=)
+  | Eceq -> binop_bool_to_int (=)
+  | Ecne -> binop_bool_to_int (<>)
 
 (* [eval_unop u x] évalue l'opération unaire [u] sur l'argument [x]. *)
 let eval_unop (u: unop) : int -> int =
   match u with
-   | _ -> fun x -> 0
+  | Eneg -> fun x -> -x
 
 (* [eval_eexpr st e] évalue l'expression [e] dans l'état [st]. Renvoie une
    erreur si besoin. *)
 let rec eval_eexpr st (e : expr) : int res =
-   Error "eval_eexpr not implemented yet."
-
+  match e with
+  | Ebinop (b, e1, e2) ->
+    eval_eexpr st e1 >>= fun v1 ->
+    eval_eexpr st e2 >>= fun v2 ->
+    OK (eval_binop b v1 v2)
+  | Eunop (u, e) ->
+    eval_eexpr st e >>= fun v ->
+    OK (eval_unop u v)
+  | Eint n -> OK n
+  | Evar x ->
+    (match Hashtbl.find_option st.env x with
+     | Some v -> OK v
+     | None -> Error (Format.sprintf "E: Variable %s not found.\n" x)
+    )
 (* [eval_einstr oc st ins] évalue l'instrution [ins] en partant de l'état [st].
 
    Le paramètre [oc] est un "output channel", dans lequel la fonction "print"
@@ -29,13 +52,48 @@ let rec eval_eexpr st (e : expr) : int res =
    Cette fonction renvoie [(ret, st')] :
 
    - [ret] est de type [int option]. [Some v] doit être renvoyé lorsqu'une
-   instruction [return] est évaluée. [None] signifie qu'aucun [return] n'a eu
-   lieu et que l'exécution doit continuer.
+     instruction [return] est évaluée. [None] signifie qu'aucun [return] n'a eu
+     lieu et que l'exécution doit continuer.
 
    - [st'] est l'état mis à jour. *)
 let rec eval_einstr oc (st: int state) (ins: instr) :
   (int option * int state) res =
-   Error "eval_einstr not implemented yet."
+  match ins with
+  | Iassign (x, e) ->
+    eval_eexpr st e >>= fun v ->
+    Hashtbl.replace st.env x v;
+    OK (None, st)
+  | Iif (e, i1, i2) ->
+    eval_eexpr st e >>= fun v ->
+    if v <> 0 then
+      eval_einstr oc st i1
+    else
+      eval_einstr oc st i2
+  | Iwhile (e, i) ->
+    eval_eexpr st e >>= fun v ->
+    if v <> 0 then
+      eval_einstr oc st i >>= fun (ret, st') ->
+      if ret <> None then
+        OK (ret, st')
+      else
+        eval_einstr oc st' ins
+    else
+      OK (None, st)
+  | Iblock il ->
+    List.fold_left (fun acc i ->
+        acc >>= fun (ret, st') ->
+        if ret <> None then
+          OK (ret, st')
+        else
+          eval_einstr oc st' i
+      ) (OK (None, st)) il
+  | Ireturn e ->
+    eval_eexpr st e >>= fun v ->
+    OK (Some v, st)
+  | Iprint e ->
+    eval_eexpr st e >>= fun v ->
+    let _ = Format.fprintf oc "%d\n" v in
+    OK (None, st)
 
 (* [eval_efun oc st f fname vargs] évalue la fonction [f] (dont le nom est
    [fname]) en partant de l'état [st], avec les arguments [vargs].
@@ -77,7 +135,7 @@ let eval_efun oc (st: int state) ({ funargs; funbody}: efun)
    - [OK None] lorsque l'évaluation de la fonction termine sans renvoyer de valeur.
 
    - [Error msg] lorsqu'une erreur survient.
-   *)
+*)
 let eval_eprog oc (ep: eprog) (memsize: int) (params: int list)
   : int option res =
   let st = init_state memsize in
