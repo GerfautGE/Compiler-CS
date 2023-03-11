@@ -44,14 +44,18 @@ let find_var (next_reg, var2reg) v =
 *)
 let rec rtl_instrs_of_cfg_expr (next_reg, var2reg) (e: expr) =
   match e with
-  | Eint(i) -> (i, [Rconst(i, next_reg)], next_reg+1, var2reg)
-  | Evar(s) -> let (r, next_reg, var2reg) = find_var (next_reg, var2reg) s in
-    (r, [], next_reg+1, var2reg@[(s, r)])
-  | Eunop(u, e) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
+  | Eint(i) -> 
+    (next_reg, [Rconst(next_reg, i)], next_reg+1, var2reg)
+  | Evar(s) -> 
+    let (r, next_reg, var2reg) = find_var (next_reg, var2reg) s in 
+    (r, [], next_reg, [(s, r)]@var2reg)
+  | Eunop(u, e) -> 
+    let (r, _, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
     (r, [Runop(u, r, next_reg)], next_reg+1, var2reg)
-  | Ebinop(b, e1, e2) -> let (r1, l1, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e1 in
-    let (r2, l2, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e2 in
-    (r1, [Rbinop(b, r1, r2, next_reg)], next_reg+1, var2reg)
+  | Ebinop(b, e1, e2) ->
+    let (r2, l2, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e2 in 
+    let (r1, l1, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e1 in
+    (next_reg, l2@l1@[Rbinop(b, next_reg, r1, r2)], next_reg+1, var2reg)
 
 let is_cmp_op =
   function Eclt -> Some Rclt
@@ -73,22 +77,20 @@ let rtl_cmp_of_cfg_expr (e: expr) =
 
 let rtl_instrs_of_cfg_node ((next_reg:int), (var2reg: (string*int) list)) (c: cfg_node) =
   let (l, next_reg, var2reg) = match c with
-    | Cassign (s, e, i) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
+    | Cassign (s, e, i) -> 
+      let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
       let (rs, next_reg, var2reg) = find_var (next_reg, var2reg) s in
-      (l @ [Rmov (r, rs)], next_reg, var2reg)
+      (l @ [Rmov (rs, r); Rjmp(i)], next_reg, var2reg)
     | Creturn (e) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
       (l @ [Rret(r)], next_reg, var2reg)
     | Cprint (e, i) -> let (r, l, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e in
-      (l @ [Rprint(r)], next_reg, var2reg)
+      (l @ [Rprint(r); Rjmp(i)], next_reg, var2reg)
     | Ccmp (e, i1, i2) ->
-      let Ebinop(b, e1, e2) = e in
+      let (rop, e1, e2) = rtl_cmp_of_cfg_expr e in
       let (r1, l1, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e1 in
       let (r2, l2, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e2 in
-      if is_cmp_op b <> None
-      then let (op, _, _) = rtl_cmp_of_cfg_expr e in
-      (l1 @ l2 @ [Rbranch(op, r1, r1, r2)], next_reg, var2reg)
-      else (l1 @ l2 @ [Rbinop(b, r1, r1, r2)], next_reg, var2reg)
-    | Cnop (i) -> ([], next_reg, var2reg)
+      (l1@l2@[Rbranch (rop, r1, r2, i1); Rjmp(i2)], next_reg, var2reg)
+    | Cnop (i) -> ([Rjmp(i)], next_reg, var2reg)
   in (l, next_reg, var2reg)
 
 let rtl_instrs_of_cfg_fun cfgfunname ({ cfgfunargs; cfgfunbody; cfgentry }: cfg_fun) =
