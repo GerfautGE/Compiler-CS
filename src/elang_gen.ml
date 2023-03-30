@@ -55,6 +55,9 @@ let rec make_eexpr_of_ast (a: tree) : expr res =
       OK (Eint i)
     | StringLeaf s ->
       OK (Evar s)
+    | Node(Tcall, [StringLeaf fname; Node(Targs, args)]) ->
+      list_map_res make_eexpr_of_ast args >>= fun args ->
+      OK (Ecall (fname, args))
     | _ -> Error (Printf.sprintf "Unacceptable ast in make_eexpr_of_ast %s"
                     (string_of_ast a))
   in
@@ -87,6 +90,9 @@ let rec make_einstr_of_ast (a: tree) : instr res =
     | Node (Tprint, [e]) ->
       make_eexpr_of_ast e >>= fun e ->
       OK (Iprint e)
+    | Node (Tcall, [StringLeaf fname; Node(Targs, args)]) ->
+      list_map_res make_eexpr_of_ast args >>= fun args ->
+      OK (Icall (fname, args))
     | _ -> Error (Printf.sprintf "Unacceptable ast in make_einstr_of_ast %s"
                     (string_of_ast a))
   in
@@ -104,7 +110,7 @@ let make_ident (a: tree) : string res =
 
 let make_fundef_of_ast (a: tree) : (string * efun) res =
   match a with
-  | Node (Tfundef, [Node (Tfunname, [StringLeaf(fname)]); Node(Tfunargs, fargs); Node(Tfunbody, [fbody])]) ->
+  | Node (Tfundef, [StringLeaf(fname); Node(Tfunargs, fargs); fbody]) ->
     list_map_res make_ident fargs >>= fun fargs ->
     make_einstr_of_ast fbody >>= fun fbody ->
       let func: efun = {funargs = fargs; funbody = fbody} in
