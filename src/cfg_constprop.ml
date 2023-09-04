@@ -32,6 +32,7 @@ let rec simple_eval_eexpr (e: expr) : int =
    )
    | Eint i -> i
    | Evar _ -> raise (Failure "simple_eval_eexpr: variable")
+    | Ecall(_, _) -> raise (Failure "simple_eval_eexpr: function call that may have side effects")
 
 (* If an expression contains variables, we cannot simply evaluate it. *)
 
@@ -42,6 +43,7 @@ let rec has_vars (e: expr) =
    | Eunop(_, e) -> has_vars e
    | Eint _ -> false
    | Evar _ -> true
+   | Ecall(_, _) -> true (* TODO: Effets de bords *)
 
 let const_prop_binop b e1 e2 =
   let e = Ebinop (b, e1, e2) in
@@ -64,6 +66,7 @@ let rec const_prop_expr (e: expr) =
     const_prop_unop u (const_prop_expr e)
   | Eint(i) -> e
   | Evar s -> e
+  | Ecall(s, el) -> e
 
 let constant_propagation_instr (i: cfg_node) : cfg_node =
   match i with
@@ -72,6 +75,7 @@ let constant_propagation_instr (i: cfg_node) : cfg_node =
   | Cprint(e, i) -> Cprint(const_prop_expr e, i)
   | Ccmp(e, i1, i2) -> Ccmp(const_prop_expr e, i1, i2)
   | Cnop(i) -> Cnop(i)
+  | Ccall(s, el, i) -> Ccall(s, List.map const_prop_expr el, i)
 
 let constant_propagation_fun ({ cfgfunbody; _ } as f: cfg_fun) =
   let ht = Hashtbl.map (fun _ m ->
