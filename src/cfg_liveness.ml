@@ -10,6 +10,7 @@ let rec vars_in_expr (e: expr) =
   | Eunop (_, e) -> vars_in_expr e
   | Eint _ -> Set.empty
   | Evar x -> Set.singleton x
+  | Ecall (_, args) -> List.fold_left (fun acc e -> Set.union acc (vars_in_expr e)) Set.empty args
 
 (* [live_cfg_node node live_after] renvoie l'ensemble des variables vivantes
    avant un nœud [node], étant donné l'ensemble [live_after] des variables

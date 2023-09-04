@@ -77,6 +77,26 @@ let rec exec_rtl_instr oc rp rtlfunname f st (i: rtl_instr) =
       | _ -> Error (Printf.sprintf "Print on undefined register (%s)" (print_reg r))
     end
   | Rlabel n -> OK (None, st)
+  | Rcall (rd,fname,rargs) -> 
+    List.map (fun r -> Hashtbl.find st.regs r) rargs |> fun args ->
+    match do_builtin oc st.mem fname args with
+      | OK Some i -> Error "On n'attend pas de retour de fonction ici"
+      | OK None -> OK (None,st)
+      | Error _ -> 
+          find_function rp fname 
+          >>! fun f -> 
+          exec_rtl_fun oc rp st fname f args
+          >>! fun (fun_result,new_state) ->
+          match rd with
+          | None -> OK(None, new_state)
+          | Some r -> 
+              begin
+              match fun_result with
+              | Some result -> 
+                Hashtbl.replace new_state.regs r result;
+                OK (None,new_state)
+              | None -> Error "On s'attend à un retour de fonction ici"
+              end 
 
 and exec_rtl_instr_at oc rp rtlfunname ({ rtlfunbody;  } as f: rtl_fun) st i =
   match Hashtbl.find_option rtlfunbody i with

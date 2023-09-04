@@ -220,7 +220,10 @@ let written_rtl_regs_instr (i: rtl_instr) =
   | Rret _
   | Rlabel _
   | Rbranch (_, _, _, _)
+  | Rcall (_,_,_)
   | Rjmp _ -> Set.empty
+
+
 
 let read_rtl_regs_instr (i: rtl_instr) =
   match i with
@@ -234,6 +237,7 @@ let read_rtl_regs_instr (i: rtl_instr) =
 
   | Rlabel _
   | Rconst (_, _)
+  | Rcall (_,_,_)
   | Rjmp _ -> Set.empty
 
 let read_rtl_regs (l: rtl_instr list) =
@@ -318,14 +322,43 @@ let ltl_instrs_of_linear_instr fname live_out allocation
         parameter_passing @
         LCall "print" ::
         LComment "Restoring a0-a7,t0-t6" :: restore_caller_save arg_saved)
-
+  | Rcall (rd, callee_fname, rargs) ->
+      caller_save live_out allocation rargs
+      >>! fun to_save ->
+      let (save_regs_instructions, arg_saved, ofs) =  
+        save_caller_save
+          (List.of_seq (Set.to_seq to_save))
+          (- (numspilled+1)) in 
+      pass_parameters rargs allocation arg_saved 
+      >>= (fun (pass_param_instr,npush) ->
+        match rd with 
+        | Some rd -> 
+          let instr_for_result_move = make_loc_mov (Reg reg_a0)
+          (Hashtbl.find allocation rd) in
+          OK ( save_regs_instructions
+          @ [LAddi (reg_sp , reg_s0 , (ofs) * Archi.wordsize())] 
+          @ pass_param_instr 
+          @ [LCall callee_fname] 
+          @ instr_for_result_move
+          @ [LAddi (reg_sp, reg_sp, npush * Archi.wordsize())]
+          @ (restore_caller_save arg_saved))
+        | None ->
+          OK ( save_regs_instructions 
+          @ [LAddi (reg_sp , reg_s0 , (ofs) * Archi.wordsize())] 
+          @ pass_param_instr 
+          @ [LCall callee_fname] 
+          @ [LAddi (reg_sp , reg_sp , npush * Archi.wordsize())] 
+          @ (restore_caller_save arg_saved)))
   | Rret r ->
     load_loc reg_tmp1 allocation r >>= fun (l,r) ->
     OK (l @ [LMov (reg_ret, r) ; LJmp epilogue_label])
+
   | Rlabel l -> OK [LLabel (Format.sprintf "%s_%d" fname l)]
-  in
-  res >>= fun l ->
-  OK (LComment (Format.asprintf "#<span style=\"background: pink;\"><b>Linear instr</b>: %a #</span>" (Rtl_print.dump_rtl_instr fname (None, None) ~endl:"") ins)::l)
+    in
+    res >>= fun l ->
+    OK (LComment (Format.asprintf "#<span style=\"background: pink;\"><b>Linear instr</b>: %a #</span>" (Rtl_print.dump_rtl_instr fname (None, None) ~endl:"") ins)::l)
+  
+       
 
 (** Retrieves the location of the n-th argument (in the callee). The first 8 are
    passed in a0-a7, the next are passed on the stack. *)

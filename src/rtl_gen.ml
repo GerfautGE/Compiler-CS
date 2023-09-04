@@ -56,6 +56,15 @@ let rec rtl_instrs_of_cfg_expr (next_reg, var2reg) (e: expr) =
     let (r2, l2, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e2 in 
     let (r1, l1, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e1 in
     (next_reg, l2@l1@[Rbinop(b, next_reg, r1, r2)], next_reg+1, var2reg)
+  | Ecall (fname, args) -> 
+    let rargs,instr,next_reg_after_call,var2reg_after_call = List.fold_left (
+      fun acc arg -> 
+      let (r_list,instr_list,next_rega,var2rega) = acc in 
+      let (newr,newinstr,newnext_reg,newvar2reg) = rtl_instrs_of_cfg_expr (next_rega, var2rega) arg in
+      (r_list @ [newr],instr_list @ newinstr , newnext_reg, newvar2reg)
+    ) ([],[],next_reg, var2reg) args in
+    (next_reg_after_call,instr @ [Rcall(Some next_reg_after_call,fname,rargs)],next_reg_after_call +1,var2reg_after_call)
+
 
 let is_cmp_op =
   function Eclt -> Some Rclt
@@ -91,6 +100,15 @@ let rtl_instrs_of_cfg_node ((next_reg:int), (var2reg: (string*int) list)) (c: cf
       let (r2, l2, next_reg, var2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) e2 in
       (l1@l2@[Rbranch (rop, r1, r2, i1); Rjmp(i2)], next_reg, var2reg)
     | Cnop (i) -> ([Rjmp(i)], next_reg, var2reg)
+    | Ccall (fname, args, next) -> 
+      let r,instr,next_reg_after_call,var2reg_after_call = List.fold_left (
+        fun acc arg -> 
+        let (r_list,instr_list,next_reg,var2reg) = acc in 
+        let (newr,newinstr,newnext_reg,newvar2reg) = rtl_instrs_of_cfg_expr (next_reg, var2reg) arg in
+        (r_list @ [newr],instr_list @ newinstr , newnext_reg, newvar2reg)
+        ) 
+        ([],[],next_reg, var2reg) args in
+      (instr @ [Rcall(None,fname,r)] @ [Rjmp(next)],next_reg_after_call,var2reg_after_call)  
   in (l, next_reg, var2reg)
 
 let rtl_instrs_of_cfg_fun cfgfunname ({ cfgfunargs; cfgfunbody; cfgentry }: cfg_fun) =
