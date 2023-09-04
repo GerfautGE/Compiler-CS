@@ -10,7 +10,7 @@ let rec vars_in_expr (e: expr) =
   | Eunop (_, e) -> vars_in_expr e
   | Eint _ -> Set.empty
   | Evar x -> Set.singleton x
-  | Ecall (_, args) -> List.fold_left (fun acc e -> Set.union acc (vars_in_expr e)) Set.empty args
+  | Ecall (fname,args) -> List.fold (fun acc arg -> Set.union acc (vars_in_expr arg)) Set.empty args
 
 (* [live_cfg_node node live_after] renvoie l'ensemble des variables vivantes
    avant un nœud [node], étant donné l'ensemble [live_after] des variables
@@ -19,6 +19,7 @@ let live_cfg_node (node: cfg_node) (live_after: string Set.t) =
   match node with
   | Cassign (s, e, i) -> Set.add s (Set.union (vars_in_expr e) live_after)
   | Creturn e -> Set.union (vars_in_expr e) live_after
+  | Ccall(fname, args, i) -> List.fold (fun acc arg -> Set.union acc (vars_in_expr arg)) live_after args 
   | _ -> live_after
 
 (* [live_cfg_nodes cfg lives] calcule l'ensemble des variables vivantes avant
