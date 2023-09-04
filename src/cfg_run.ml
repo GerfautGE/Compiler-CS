@@ -51,10 +51,6 @@ and eval_cfginstr cp oc st ht (n: int): (int * int state) res =
     | Creturn(e) ->
       eval_cfgexpr cp oc st e >>= fun e ->
       OK (e, st)
-    | Cprint(e, succ) ->
-      eval_cfgexpr cp oc st e >>= fun e ->
-      Format.fprintf oc "%d\n" e;
-      eval_cfginstr cp oc st ht succ
       | Ccall (funame,args,s) -> 
         let funargs = (List.map (fun arg -> eval_cfgexpr cp oc st arg >>! fun valeur -> valeur) args) in
         match do_builtin oc st.mem funame funargs with

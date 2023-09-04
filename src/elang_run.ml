@@ -2,6 +2,7 @@ open Elang
 open Batteries
 open Prog
 open Utils
+open Builtins
 
 let binop_bool_to_int f x y = if f x y then 1 else 0
 
@@ -99,16 +100,17 @@ and eval_einstr ep oc (st: int state) (ins: instr) :
   | Ireturn e ->
     eval_eexpr ep oc st e >>= fun v ->
     OK (Some v, st)
-  | Iprint e ->
-    eval_eexpr ep oc st e >>= fun v ->
-    let _ = Format.fprintf oc "%d\n" v in
-    OK (None, st)
     | Icall (funame,args) -> 
-      find_function ep funame >>! (fun f ->
-        eval_efun ep oc st f funame (List.map (fun arg -> eval_eexpr ep oc st arg >>! fun valeur -> valeur) args) >>! 
+      match do_builtin oc st.mem funame (List.map (fun arg -> eval_eexpr ep oc st arg >>! fun valeur -> valeur) args) with
+      | OK Some i -> OK (Some i,st)
+      | OK None -> OK (None, st)
+      | Error _ -> 
+         find_function ep funame >>! (fun f ->
+            eval_efun ep oc st f funame (List.map (fun arg -> eval_eexpr ep oc st arg >>! fun valeur -> valeur) args) >>! 
             (fun (fun_result, new_state) -> 
                OK (None,new_state)
                   ))
+   
 
 (* [eval_efun oc st f fname vargs] évalue la fonction [f] (dont le nom est
    [fname]) en partant de l'état [st], avec les arguments [vargs].

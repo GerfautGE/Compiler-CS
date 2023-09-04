@@ -72,7 +72,6 @@ let constant_propagation_instr (i: cfg_node) : cfg_node =
   match i with
   | Cassign(s, e, i) -> Cassign(s, const_prop_expr e, i)
   | Creturn(e) -> Creturn(const_prop_expr e)
-  | Cprint(e, i) -> Cprint(const_prop_expr e, i)
   | Ccmp(e, i1, i2) -> Ccmp(const_prop_expr e, i1, i2)
   | Cnop(i) -> Cnop(i)
   | Ccall(s, el, i) -> Ccall(s, List.map const_prop_expr el, i)

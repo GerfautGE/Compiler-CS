@@ -56,9 +56,6 @@ let rec dump_einstr_rec indent oc i =
   | Ireturn(e) ->
     print_spaces oc indent;
     Format.fprintf oc "return %s;\n" (dump_eexpr e)
-  | Iprint(e) ->
-    print_spaces oc indent;
-    Format.fprintf oc "print %s;\n" (dump_eexpr e)
   | Icall(s, el) ->
     print_spaces oc indent;
     Format.fprintf oc "%s(%s);\n" s (String.concat "," (List.map dump_eexpr el))

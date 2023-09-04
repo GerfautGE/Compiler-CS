@@ -87,9 +87,6 @@ let rec make_einstr_of_ast (a: tree) : instr res =
     | Node (Treturn, [e]) ->
       make_eexpr_of_ast e >>= fun e ->
       OK (Ireturn e)
-    | Node (Tprint, [e]) ->
-      make_eexpr_of_ast e >>= fun e ->
-      OK (Iprint e)
     | Node (Tcall, [StringLeaf fname; Node(Targs, args)]) ->
       list_map_res make_eexpr_of_ast args >>= fun args ->
       OK (Icall (fname, args))
