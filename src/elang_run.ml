@@ -29,14 +29,14 @@ let eval_unop (u: unop) : int -> int =
 
 (* [eval_eexpr st e] évalue l'expression [e] dans l'état [st]. Renvoie une
    erreur si besoin. *)
-let rec eval_eexpr st (e : expr) : int res =
+let rec eval_eexpr ep oc st (e : expr) : int res =
   match e with
   | Ebinop (b, e1, e2) ->
-    eval_eexpr st e1 >>= fun v1 ->
-    eval_eexpr st e2 >>= fun v2 ->
+    eval_eexpr ep oc st e1 >>= fun v1 ->
+    eval_eexpr ep oc st e2 >>= fun v2 ->
     OK (eval_binop b v1 v2)
   | Eunop (u, e) ->
-    eval_eexpr st e >>= fun v ->
+    eval_eexpr ep oc st e >>= fun v ->
     OK (eval_unop u v)
   | Eint n -> OK n
   | Evar x ->
@@ -44,6 +44,15 @@ let rec eval_eexpr st (e : expr) : int res =
      | Some v -> OK v
      | None -> Error (Format.sprintf "E: Variable %s not found.\n" x)
     )
+    | Ecall (fname,args) -> 
+      find_function ep fname >>! (fun f ->
+      eval_efun ep oc st f fname (List.map (fun arg -> eval_eexpr ep oc st arg >>! fun valeur -> valeur) args)
+       >>! (fun (fun_result, new_state) ->  
+      (match fun_result with 
+      | Some result -> OK (result)
+      | None -> Error ("On attend une valeur de retour pour cet appel de fonction"))))
+
+    
 (* [eval_einstr oc st ins] évalue l'instrution [ins] en partant de l'état [st].
 
    Le paramètre [oc] est un "output channel", dans lequel la fonction "print"
@@ -56,27 +65,27 @@ let rec eval_eexpr st (e : expr) : int res =
      lieu et que l'exécution doit continuer.
 
    - [st'] est l'état mis à jour. *)
-let rec eval_einstr oc (st: int state) (ins: instr) :
+and eval_einstr ep oc (st: int state) (ins: instr) :
   (int option * int state) res =
   match ins with
   | Iassign (x, e) ->
-    eval_eexpr st e >>= fun v ->
+    eval_eexpr ep oc st e >>= fun v ->
     Hashtbl.replace st.env x v;
     OK (None, st)
   | Iif (e, i1, i2) ->
-    eval_eexpr st e >>= fun v ->
+    eval_eexpr ep oc st e >>= fun v ->
     if v <> 0 then
-      eval_einstr oc st i1
+      eval_einstr ep oc st i1
     else
-      eval_einstr oc st i2
+      eval_einstr ep oc st i2
   | Iwhile (e, i) ->
-    eval_eexpr st e >>= fun v ->
+    eval_eexpr ep oc st e >>= fun v ->
     if v <> 0 then
-      eval_einstr oc st i >>= fun (ret, st') ->
+      eval_einstr ep  oc st i >>= fun (ret, st') ->
       if ret <> None then
         OK (ret, st')
       else
-        eval_einstr oc st' ins
+        eval_einstr ep oc st' ins
     else
       OK (None, st)
   | Iblock il ->
@@ -85,22 +94,28 @@ let rec eval_einstr oc (st: int state) (ins: instr) :
         if ret <> None then
           OK (ret, st')
         else
-          eval_einstr oc st' i
+          eval_einstr ep oc st' i
       ) (OK (None, st)) il
   | Ireturn e ->
-    eval_eexpr st e >>= fun v ->
+    eval_eexpr ep oc st e >>= fun v ->
     OK (Some v, st)
   | Iprint e ->
-    eval_eexpr st e >>= fun v ->
+    eval_eexpr ep oc st e >>= fun v ->
     let _ = Format.fprintf oc "%d\n" v in
     OK (None, st)
+    | Icall (funame,args) -> 
+      find_function ep funame >>! (fun f ->
+        eval_efun ep oc st f funame (List.map (fun arg -> eval_eexpr ep oc st arg >>! fun valeur -> valeur) args) >>! 
+            (fun (fun_result, new_state) -> 
+               OK (None,new_state)
+                  ))
 
 (* [eval_efun oc st f fname vargs] évalue la fonction [f] (dont le nom est
    [fname]) en partant de l'état [st], avec les arguments [vargs].
 
    Cette fonction renvoie un couple (ret, st') avec la même signification que
    pour [eval_einstr]. *)
-let eval_efun oc (st: int state) ({ funargs; funbody}: efun)
+and eval_efun ep oc (st: int state) ({ funargs; funbody}: efun)
     (fname: string) (vargs: int list)
   : (int option * int state) res =
   (* L'environnement d'une fonction (mapping des variables locales vers leurs
@@ -112,7 +127,7 @@ let eval_efun oc (st: int state) ({ funargs; funbody}: efun)
   let env = Hashtbl.create 17 in
   match List.iter2 (fun a v -> Hashtbl.replace env a v) funargs vargs with
   | () ->
-    eval_einstr oc { st with env } funbody >>= fun (v, st') ->
+    eval_einstr ep oc { st with env } funbody >>= fun (v, st') ->
     OK (v, { st' with env = env_save })
   | exception Invalid_argument _ ->
     Error (Format.sprintf
@@ -143,5 +158,5 @@ let eval_eprog oc (ep: eprog) (memsize: int) (params: int list)
   (* ne garde que le nombre nécessaire de paramètres pour la fonction "main". *)
   let n = List.length f.funargs in
   let params = take n params in
-  eval_efun oc st f "main" params >>= fun (v, _) ->
+  eval_efun ep oc st f "main" params >>= fun (v, _) ->
   OK v
