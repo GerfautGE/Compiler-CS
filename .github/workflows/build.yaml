@@ -1,0 +1,20 @@
+name: Build Compiler
+
+on:
+    push:
+        branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@master
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get upgrade -y && sudo apt-get install opam -y
+      - name: opam config
+        run: opam init --disable-sandboxing -y
+      - name: opam install
+        run: opam install dune stdlib-shims ocamlbuild ocamlfind menhir lwt logs batteries yojson websocket websocket-lwt-unix -y
+      - name: Build
+        run: eval $(opam env) && make
