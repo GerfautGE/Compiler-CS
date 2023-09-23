@@ -16,7 +16,7 @@ jobs:
       - name: opam install
         run: opam install dune stdlib-shims ocamlbuild ocamlfind menhir lwt logs batteries yojson websocket websocket-lwt-unix -y
       - name: Build
-        run: eval $(opam env) && make && mv _build/default/main.exe ecomp_riscv64
+        run: eval $(opam env) && make && mv src/_build/default/main.exe ecomp_riscv64
       - uses: ncipollo/release-action@v1
         with:
           artifacts: 'ecomp_riscv64'
