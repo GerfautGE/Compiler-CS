@@ -2,12 +2,29 @@ name: Build Compiler
 
 on:
     push:
-        branches: [ master ]
+        tags: [ v* ]
 
 jobs:
-  build:
+  create_release:
+    name: create_release
     runs-on: ubuntu-latest
-
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+        - uses: actions/checkout@master
+        - name: create_release
+          id: create_release
+          uses: actions/create-release@master
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            tag_name: ${{ github.ref }}
+            release_name: Release ${{ github.ref }}
+            draft: false
+            prerelease: false
+  build:
+    needs: create_release
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
       - name: Install dependencies
@@ -17,4 +34,15 @@ jobs:
       - name: opam install
         run: opam install dune stdlib-shims ocamlbuild ocamlfind menhir lwt logs batteries yojson websocket websocket-lwt-unix -y
       - name: Build
-        run: eval $(opam env) && make
+        run: eval $(opam env) && make && mv _build/default/main.exe ecomp_riscv64
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./ecomp_riscv64
+          asset_name: ecomp_riscv64
+          asset_content_type: application/octet-stream
+      
